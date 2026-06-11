@@ -1,0 +1,18 @@
+export declare const textDecoder: TextDecoder;
+export declare const asciiDecoder: TextDecoder;
+export declare function decodeUtf8(bytes: Uint8Array): string;
+export declare function decodeUtf16Le(bytes: Uint8Array): string;
+export declare function normalizePath(path: string): string;
+export declare function dirname(path: string): string;
+export declare function resolvePart(basePath: string, target: string): string;
+export declare function stripNamespace(name: string): string;
+export declare function localName(el: Element): string;
+export declare function getAttr(el: Element, name: string): string | undefined;
+export declare function childElements(el: ParentNode): Element[];
+export declare function parseXml(xml: string, source?: string): Document;
+export declare function bytesLookTextual(bytes: Uint8Array, sampleLength?: number): boolean;
+export declare function extname(path: string): string;
+export declare function mimeFromPath(path: string): string | undefined;
+export declare function blobToImage(bytes: Uint8Array, type: string): Promise<HTMLImageElement | ImageBitmap>;
+export declare function clamp(n: number, lo: number, hi: number): number;
+export declare function parseNumberList(input: string): number[];

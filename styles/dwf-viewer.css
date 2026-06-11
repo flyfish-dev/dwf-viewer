@@ -1,0 +1,51 @@
+.dwfv-root {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111827;
+}
+.dwfv-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.dwfv-toolbar button,
+.dwfv-toolbar select { font: inherit; }
+.dwfv-workspace {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+}
+.dwfv-tree {
+  overflow: auto;
+  border-right: 1px solid #d6d8dd;
+  background: #fff;
+  font-size: 12px;
+  padding: 8px;
+}
+.dwfv-tree[style*="display: none"] + .dwfv-stage { grid-column: 1 / -1; }
+.dwfv-tree-header { font-weight: 700; margin-bottom: 4px; }
+.dwfv-tree-stats { color: #6b7280; margin-bottom: 8px; }
+.dwfv-tree details { margin-left: 8px; }
+.dwfv-tree summary { cursor: pointer; padding: 2px 0; }
+.dwfv-tree-meta {
+  color: #6b7280;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding-left: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dwfv-stage { position: relative; overflow: hidden; background: #e5e7eb; }
+.dwfv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dwfv-webgl-canvas { pointer-events: none; }
+.dwfv-overlay-canvas { pointer-events: auto; touch-action: none; cursor: grab; }
+.dwfv-overlay-canvas:active { cursor: grabbing; }
+.dwfv-status { margin-left: auto; font-size: 12px; color: #4b5563; }
+.dwfv-warn { color: #92400e; }
