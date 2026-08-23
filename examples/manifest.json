@@ -13,6 +13,19 @@
     }
   },
   {
+    "id": "legacy-ascii-v0034",
+    "title": "AutoCAD R14 · Legacy ASCII DWF V00.34",
+    "kind": "2d",
+    "path": "legacy-ascii-v0034.dwf",
+    "description": "Dependency-free regression fixture for pre-DWF-6 readable WHIP!/W2D streams, including multiline point sets, palette colors, triangle strips, fill state, visibility, and source background.",
+    "descriptionZh": "早期 AutoCAD 可读 ASCII DWF V00.34 回归示例，覆盖跨行点集、调色板、三角带、填充、可见性和源文件背景。",
+    "expected": {
+      "pageKind": "w2d-text",
+      "pages": 1,
+      "maxWarnings": 0
+    }
+  },
+  {
     "id": "autodesk-floor-plans-dwfx",
     "title": "Autodesk Floor Plans · 2D DWFx/XPS",
     "kind": "2d",
