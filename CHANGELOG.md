@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added a linear-time parser for pre-DWF-6 readable WHIP!/W2D streams such as AutoCAD R14 DWF V00.34 files.
+- Added palette/background handling and core `C`, `L`, `P`, `T`, `M`, `F/f`, and `V/v` opcode support, including multiline counted point sets and correct triangle-strip triangulation.
+- Added a public synthetic legacy ASCII regression fixture while keeping customer drawings out of the repository.
+
 ## 0.6.4 - 2026-06-12
 
 - Restored colorful W3D/HSF 3D rendering for eModel files whose ContentDefinition instance count does not match decoded shell geometry, avoiding incorrect ordinal material binding that could wash Robot Arm into gray.
