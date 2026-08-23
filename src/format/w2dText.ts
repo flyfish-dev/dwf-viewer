@@ -2,15 +2,23 @@ import { diag, type Diagnostic } from './types.js';
 import { decodeUtf8, parseNumberList } from './util.js';
 import { parsePathData } from '../render/xpsPath.js';
 import type { W2dPrimitive } from './document.js';
+import { isLegacyAsciiDwf, parseLegacyAsciiDwf } from './legacyAsciiDwf.js';
 
 export interface W2dTextParseResult {
+  format: 'legacy-ascii-dwf' | 'generic-text';
   primitives: W2dPrimitive[];
   diagnostics: Diagnostic[];
   bounds?: { minX: number; minY: number; maxX: number; maxY: number };
+  version?: string;
+  background?: string;
 }
 
 export function parseW2dText(bytes: Uint8Array, sourcePath: string): W2dTextParseResult {
   const text = decodeUtf8(bytes);
+  if (isLegacyAsciiDwf(text)) {
+    return { format: 'legacy-ascii-dwf', ...parseLegacyAsciiDwf(text, sourcePath) };
+  }
+
   const diagnostics: Diagnostic[] = [];
   const primitives: W2dPrimitive[] = [];
   let stroke = '#000000';
@@ -122,7 +130,7 @@ export function parseW2dText(bytes: Uint8Array, sourcePath: string): W2dTextPars
   if (parsedLines === 0) {
     diagnostics.push(diag('warning', 'W2D_TEXT_UNKNOWN_DIALECT', 'The file is textual, but does not look like the supported WHIP/W2D textual subset.', sourcePath));
   }
-  return { primitives, diagnostics, bounds };
+  return { format: 'generic-text', primitives, diagnostics, bounds };
 }
 
 function normalizePointList(nums: number[]): number[] {
@@ -156,9 +164,9 @@ function computeBounds(primitives: W2dPrimitive[]): { minX: number; minY: number
       add(p.x, p.y); add(p.x + p.text.length * (p.size ?? 12) * 0.6, p.y + (p.size ?? 12));
     } else if (p.type === 'path') {
       for (const c of p.commands) {
-        if ('x' in c && 'y' in c) add(c.x, c.y);
-        if ('x1' in c && 'y1' in c) add(c.x1, c.y1);
-        if ('x2' in c && 'y2' in c) add(c.x2, c.y2);
+        if (typeof c.x === 'number' && typeof c.y === 'number') add(c.x, c.y);
+        if (typeof c.x1 === 'number' && typeof c.y1 === 'number') add(c.x1, c.y1);
+        if (typeof c.x2 === 'number' && typeof c.y2 === 'number') add(c.x2, c.y2);
       }
     }
   }
