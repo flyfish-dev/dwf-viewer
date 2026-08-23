@@ -20,6 +20,7 @@ export async function openDwfDocument(input: ArrayBuffer | Uint8Array | Blob | F
 
   if (bytesLookTextual(bytes)) {
     const parsed = parseW2dText(bytes, fileName);
+    const isLegacyAsciiDwf = parsed.format === 'legacy-ascii-dwf';
     const pageData: PageData[] = [{
       id: 'page-1',
       name: fileName,
@@ -32,10 +33,12 @@ export async function openDwfDocument(input: ArrayBuffer | Uint8Array | Blob | F
       diagnostics: parsed.diagnostics
     } as W2dTextPageData];
     const base: DwfDocument = {
-      kind: 'unknown',
+      kind: isLegacyAsciiDwf ? 'dwf' : 'unknown',
       pages: [],
-      resources: [{ path: fileName, mediaType: 'text/plain', size: bytes.byteLength }],
-      diagnostics: [diag('warning', 'RAW_TEXT_W2D_MODE', 'Input is not a DWF ZIP package; opened it as a textual W2D-like vector stream.', fileName)],
+      resources: [{ path: fileName, mediaType: isLegacyAsciiDwf ? 'model/vnd.dwf' : 'text/plain', size: bytes.byteLength }],
+      diagnostics: isLegacyAsciiDwf
+        ? [diag('info', 'LEGACY_ASCII_DWF_MODE', `Opened ${parsed.version ?? 'legacy'} readable WHIP!/W2D stream as a classic DWF document.`, fileName)]
+        : [diag('warning', 'RAW_TEXT_W2D_MODE', 'Input is not a DWF ZIP package; opened it as a textual W2D-like vector stream.', fileName)],
       packageEntries: [fileName]
     };
     return makeLoadedDocument(base, pageData);
@@ -49,7 +52,7 @@ export async function openDwfDocument(input: ArrayBuffer | Uint8Array | Blob | F
     height: 1000,
     sourcePath: fileName,
     reason: 'Input is neither a ZIP-based DWF/DWFx package nor a supported textual W2D stream.',
-    diagnostics: [diag('error', 'UNSUPPORTED_RAW_FORMAT', 'Unsupported raw DWF input. DWF 6+/DWFx ZIP packages are required for this build.', fileName)]
+    diagnostics: [diag('error', 'UNSUPPORTED_RAW_FORMAT', 'Unsupported raw DWF input. DWF 6+/DWFx ZIP packages or readable legacy WHIP!/W2D streams are required for this build.', fileName)]
   };
   const base: DwfDocument = {
     kind: 'unknown',
