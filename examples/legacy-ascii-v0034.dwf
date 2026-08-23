@@ -1,0 +1,23 @@
+(DWF V00.34)
+(Author 'Regression fixture')
+(Creator 'dwf-viewer')
+(ColorMap 4
+  0,0,0,255 255,255,255,255 255,0,0,255 0,255,0,255)
+(Background 0)
+C 1
+L 0,0 100,0
+P 5 0,0 100,0 100,100
+    50,125 0,100
+C 2
+T 4 20,20 20,80 80,20 80,80
+F
+C 3
+P 3 10,10 50,90 90,10
+f
+M 1 50,50
+v
+(URL 'javascript:void(0);')
+L 0,0 100,100
+V
+L 0,100 100,100
+(EndOfDWF)
