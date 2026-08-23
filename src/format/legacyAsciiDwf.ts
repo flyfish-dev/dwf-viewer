@@ -330,9 +330,9 @@ function computeBounds(primitives: W2dPrimitive[]): W2dBounds | undefined {
       add(primitive.x + primitive.text.length * size * 0.6, primitive.y + size);
     } else if (primitive.type === 'path') {
       for (const command of primitive.commands) {
-        if (typeof command.x === 'number' && typeof command.y === 'number') add(command.x, command.y);
-        if (typeof command.x1 === 'number' && typeof command.y1 === 'number') add(command.x1, command.y1);
-        if (typeof command.x2 === 'number' && typeof command.y2 === 'number') add(command.x2, command.y2);
+        if ('x' in command && 'y' in command && typeof command.x === 'number' && typeof command.y === 'number') add(command.x, command.y);
+        if ('x1' in command && 'y1' in command && typeof command.x1 === 'number' && typeof command.y1 === 'number') add(command.x1, command.y1);
+        if ('x2' in command && 'y2' in command && typeof command.x2 === 'number' && typeof command.y2 === 'number') add(command.x2, command.y2);
       }
     }
   }
