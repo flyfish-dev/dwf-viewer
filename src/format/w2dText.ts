@@ -164,9 +164,9 @@ function computeBounds(primitives: W2dPrimitive[]): { minX: number; minY: number
       add(p.x, p.y); add(p.x + p.text.length * (p.size ?? 12) * 0.6, p.y + (p.size ?? 12));
     } else if (p.type === 'path') {
       for (const c of p.commands) {
-        if (typeof c.x === 'number' && typeof c.y === 'number') add(c.x, c.y);
-        if (typeof c.x1 === 'number' && typeof c.y1 === 'number') add(c.x1, c.y1);
-        if (typeof c.x2 === 'number' && typeof c.y2 === 'number') add(c.x2, c.y2);
+        if ('x' in c && 'y' in c && typeof c.x === 'number' && typeof c.y === 'number') add(c.x, c.y);
+        if ('x1' in c && 'y1' in c && typeof c.x1 === 'number' && typeof c.y1 === 'number') add(c.x1, c.y1);
+        if ('x2' in c && 'y2' in c && typeof c.x2 === 'number' && typeof c.y2 === 'number') add(c.x2, c.y2);
       }
     }
   }
