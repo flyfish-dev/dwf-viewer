@@ -5,7 +5,16 @@ const targets = [
   { label: 'Autodesk Floor Plans DWFx A03', path: 'examples/autodesk-floor-plans.dwfx', pageIndex: 3, kind: 'xps-fixed-page', minPages: 18, maxNonInfoDiagnostics: 0 },
   { label: 'Robot Arm 3D DWFx', path: 'examples/robot-arm.dwfx', kind: 'w3d-model', minMeshes: 30, minTriangles: 40000, minDistinctMeshColors: 24, maxNonInfoDiagnostics: 0, maxPageDiagnostics: 0 },
   { label: '2D sample DWFx', path: 'examples/minimal-xps.dwfx', kind: 'xps-fixed-page' },
-  { label: 'official binary W2D DWF', path: 'examples/blocks-and-tables.dwf', kind: 'w2d-text' }
+  { label: 'official binary W2D DWF', path: 'examples/blocks-and-tables.dwf', kind: 'w2d-text' },
+  {
+    label: 'AutoCAD R14 legacy ASCII DWF V00.34',
+    path: 'examples/legacy-ascii-v0034.dwf',
+    kind: 'w2d-text',
+    expectedPrimitives: 8,
+    expectedPrimitiveTypes: { polyline: 3, polygon: 3, rect: 2 },
+    expectedBackdrop: 'rgb(0, 0, 0)',
+    maxNonInfoDiagnostics: 0
+  }
 ];
 
 let failed = false;
@@ -13,6 +22,8 @@ for (const t of targets) {
   const doc = await openDwfDocument(await readFile(t.path), { fileName: t.path });
   const page = doc.pageData[t.pageIndex ?? 0];
   const nonInfo = (page?.diagnostics ?? []).filter(d => d.level !== 'info');
+  const primitiveTypes = page?.kind === 'w2d-text' ? countPrimitiveTypes(page.primitives) : undefined;
+  const backdrop = page?.kind === 'w2d-text' && page.primitives[0]?.type === 'rect' ? page.primitives[0].fill : undefined;
   const record = {
     label: t.label,
     documentKind: doc.kind,
@@ -20,6 +31,9 @@ for (const t of targets) {
     pageIndex: t.pageIndex ?? 0,
     pageKind: page?.kind,
     pageName: page?.name,
+    primitives: page?.kind === 'w2d-text' ? page.primitives.length : undefined,
+    primitiveTypes,
+    backdrop,
     meshes: page?.kind === 'w3d-model' ? page.model.meshes.length : undefined,
     triangles: page?.kind === 'w3d-model' ? page.model.stats.triangleCount : undefined,
     distinctMeshColors: page?.kind === 'w3d-model' ? distinctMeshColors(page) : undefined,
@@ -32,6 +46,18 @@ for (const t of targets) {
   if (typeof t.minMeshes === 'number' && (!(page?.kind === 'w3d-model') || page.model.meshes.length < t.minMeshes)) failed = true;
   if (typeof t.minTriangles === 'number' && (!(page?.kind === 'w3d-model') || page.model.stats.triangleCount < t.minTriangles)) failed = true;
   if (typeof t.minDistinctMeshColors === 'number' && (!(page?.kind === 'w3d-model') || distinctMeshColors(page) < t.minDistinctMeshColors)) failed = true;
+  if (typeof t.expectedPrimitives === 'number' && (!(page?.kind === 'w2d-text') || page.primitives.length !== t.expectedPrimitives)) failed = true;
+  if (t.expectedPrimitiveTypes) {
+    if (!(page?.kind === 'w2d-text')) {
+      failed = true;
+    } else {
+      const actual = countPrimitiveTypes(page.primitives);
+      for (const [type, count] of Object.entries(t.expectedPrimitiveTypes)) {
+        if ((actual[type] ?? 0) !== count) failed = true;
+      }
+    }
+  }
+  if (typeof t.expectedBackdrop === 'string' && backdrop !== t.expectedBackdrop) failed = true;
   if (typeof t.maxNonInfoDiagnostics === 'number' && nonInfo.length > t.maxNonInfoDiagnostics) failed = true;
   if (typeof t.maxPageDiagnostics === 'number' && (page?.diagnostics?.length ?? 0) > t.maxPageDiagnostics) failed = true;
 }
@@ -87,4 +113,10 @@ if (failed) process.exit(1);
 
 function distinctMeshColors(page) {
   return new Set(page.model.meshes.map(mesh => (mesh.color ?? []).map(v => Number(v).toFixed(4)).join(','))).size;
+}
+
+function countPrimitiveTypes(primitives) {
+  const counts = {};
+  for (const primitive of primitives) counts[primitive.type] = (counts[primitive.type] ?? 0) + 1;
+  return counts;
 }
