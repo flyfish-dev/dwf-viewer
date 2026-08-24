@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.6.5 - 2026-08-24
 
 - Added a linear-time parser for pre-DWF-6 readable WHIP!/W2D streams such as AutoCAD R14 DWF V00.34 files.
 - Added palette/background handling and core `C`, `L`, `P`, `T`, `M`, `F/f`, and `V/v` opcode support, including multiline counted point sets and correct triangle-strip triangulation.
 - Added a public synthetic legacy ASCII regression fixture while keeping customer drawings out of the repository.
+- Fixed strict TypeScript builds for path-command bounds calculation so both CI and the Cloudflare Pages demo build remain green.
 
 ## 0.6.4 - 2026-06-12
 
