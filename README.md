@@ -13,7 +13,7 @@ English is the default language for the README, npm package, and online demo. Th
 | npm | https://www.npmjs.com/package/dwf-viewer |
 | scoped npm | https://www.npmjs.com/package/@flyfish-dev/dwf-viewer |
 
-Current version: `0.6.4`
+Current version: `0.6.5`
 
 ## Why
 
@@ -36,6 +36,7 @@ DWF Viewer 是面向 Web 的开源纯前端 DWF/DWFx 预览组件。它在浏览
 | DWFx / OPC package | Supported |
 | XPS FixedPage 2D sheets | Supported common subset with WebGL vector acceleration and Canvas text/image overlay |
 | Classic binary WHIP!/W2D 2D sheets | Supported for core geometry/text/images used by Autodesk samples |
+| Legacy readable ASCII WHIP!/W2D (including AutoCAD R14 DWF V00.34) | Supported for palette colors, backgrounds, core geometry, markers, fill state, and visibility |
 | Textual W2D pages | Supported for smoke tests and simple sheets |
 | W3D/HSF 3D eModel shell geometry | Supported: uncompressed, CS_TRIVIAL, and Edgebreaker shell meshes |
 | Three.js adapter | Supported |
@@ -131,6 +132,12 @@ Version `0.6.3` adds a repair-and-fallback path for legacy Autodesk eModel XML m
 
 This keeps valid 3D DWFx models from surfacing noisy `EMODEL_CONTENTDEF_PARSE_FAILED` diagnostics when only optional metadata XML is malformed.
 
+## Legacy AutoCAD R14 ASCII DWF
+
+Version `0.6.5` recognizes pre-DWF-6 readable WHIP!/W2D streams such as `DWF V00.34` files produced by AutoCAD R14. These files are plain opcode streams rather than DWF 6+ ZIP packages, so the loader routes them through a bounded stream parser instead of the generic line-oriented text fallback.
+
+The supported legacy subset includes palette and background colors, `C`, `L`, `P`, `T`, `M`, `F/f`, and `V/v` opcodes, multiline counted point sets, and triangle-strip triangulation. The source background is emitted consistently across Canvas, WASM, and WebGL render paths.
+
 ## Three.js Integration
 
 ```ts
@@ -173,6 +180,7 @@ The demo examples are listed in `examples/manifest.json` and are intentionally d
 | Example | Purpose |
 |---|---|
 | `blocks-and-tables.dwf` | Default demo. Binary WHIP!/W2D ePlot sample with fast loading and a clear first impression |
+| `legacy-ascii-v0034.dwf` | Synthetic AutoCAD R14-style readable ASCII DWF regression covering multiline geometry, palette/background handling, triangle strips, fill state, markers, and visibility |
 | `autodesk-floor-plans.dwfx` | Multi-page architectural DWFx/XPS sample, using A03 First Floor Plan for WebGL XPS, embedded font, and thin-line overview validation |
 | `robot-arm.dwfx` | 3D W3D/HSF eModel with shell meshes, scene tree, materials, textures, and saved views |
 | `minimal-xps.dwfx` | Small DWFx/XPS FixedPage sample |
