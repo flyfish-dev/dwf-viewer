@@ -1,6 +1,6 @@
 {
   "name": "dwf-viewer",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "private": false,
   "type": "module",
   "description": "World's first open-source pure frontend DWF/DWFx preview component with WebGL XPS/W2D 2D rendering, W3D/HSF 3D rendering, embedded fonts, and WASM fallback.",
