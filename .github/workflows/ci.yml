@@ -16,6 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: node scripts/validate-monochrome.mjs
       - run: npm run validate:production
       - run: npm run check:examples
       - run: npm run build:demo
