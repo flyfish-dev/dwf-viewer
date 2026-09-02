@@ -57,7 +57,7 @@ export function createMonochromePage(page: PageData, color: string): PageData {
       primitives: page.primitives.map((primitive) => monochromePrimitive(primitive, normalized))
     };
   } else {
-    const target = parseColor(normalized) ?? NAMED_COLORS.black;
+    const target = parseColor(normalized) ?? NAMED_COLORS.black!;
     const rgb = [target.r / 255, target.g / 255, target.b / 255] as [number, number, number];
     transformed = {
       ...page,
@@ -98,7 +98,7 @@ export function applyXpsMonochromeXml(xml: string, color: string): string {
 
 /** Preserves source brush alpha and combines it with an optional target alpha. */
 export function monochromeColorWithAlpha(color: string, sourceColor?: string): string {
-  const target = parseColor(color) ?? NAMED_COLORS.black;
+  const target = parseColor(color) ?? NAMED_COLORS.black!;
   const source = sourceColor ? parseColor(sourceColor) : undefined;
   return toCssColor({
     r: target.r,
@@ -177,7 +177,7 @@ function parseColor(value: string): RgbaColor | undefined {
       const channels = parts.slice(0, 3).map(parseChannel);
       const alpha = parts[3] === undefined ? 1 : parseAlpha(parts[3]);
       if (channels.every((item): item is number => item !== undefined) && alpha !== undefined) {
-        return { r: channels[0], g: channels[1], b: channels[2], a: alpha };
+        return { r: channels[0]!, g: channels[1]!, b: channels[2]!, a: alpha };
       }
     }
   }
