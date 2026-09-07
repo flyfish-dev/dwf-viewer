@@ -4,6 +4,10 @@
 
 English is the default language for the README, npm package, and online demo. The demo UI can switch to Chinese from the language selector.
 
+## 0.6.7 candidate: screen contrast
+
+The unpublished candidate adds optional `contrastMode: 'adaptive'` and `minColorContrast: 2.4` constructor/load options, plus `viewer.setContrastOptions(...)`. These improve W2D and XPS vector/text colors that are too close to the active background, including black lines on a dark CAD canvas. The default remains `'preserve'`; explicit monochrome colors take priority. Source bytes, parsed colors, geometry, alpha and image resources remain unchanged. Changing the background or policy invalidates render caches rather than repainting stale colors.
+
 ## Links
 
 | Entry | URL |

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7 (candidate, not published)
+
+- Add optional adaptive contrast for native W2D and XPS vector/text colors on dark or light backgrounds.
+- Invalidate render caches when the background or contrast policy changes; keep source bytes, alpha, geometry and image resources unchanged.
+- Keep preserve mode as the default and give explicit monochrome colors priority over contrast adjustment.
+
 ## 0.6.6 - 2026-09-05
 
 - Added non-destructive fixed-color rendering for DWF, DWFx and XPS vector content.

@@ -1,6 +1,6 @@
 {
   "name": "dwf-viewer",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "private": false,
   "type": "module",
   "description": "World's first open-source pure frontend DWF/DWFx preview component with WebGL XPS/W2D 2D rendering, W3D/HSF 3D rendering, embedded fonts, and WASM fallback.",
@@ -74,6 +74,7 @@
     "clean": "rm -rf dist demo-dist public/dwfv-render.wasm",
     "inspect:dwfx": "node scripts/inspect-dwfx.mjs",
     "validate:production": "node scripts/validate-production.mjs",
+    "test:color-policy": "npm run build:ts && node scripts/validate-monochrome.mjs && node scripts/validate-contrast.mjs",
     "check:examples": "node scripts/check-examples.mjs",
     "check:package": "node scripts/package-check.mjs",
     "prepublishOnly": "npm run build && npm run validate:production && npm run check:package",

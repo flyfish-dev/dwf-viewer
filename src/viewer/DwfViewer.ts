@@ -6,13 +6,14 @@ import type {
 import type { LoadedDwfDocument } from '../format/document.js';
 import type { RenderStats } from '../format/types.js';
 import type { PageRenderer } from '../render/PageRenderer.js';
+import { applyXpsContrastXml, contrastPolicyKey, createContrastPage, type ColorContrastOptions } from '../render/contrast.js';
 import {
   applyXpsMonochromeXml,
   createMonochromePage,
   normalizeMonochromeColor
 } from '../render/monochrome.js';
 
-export interface DwfViewerOptions extends BaseDwfViewerOptions {
+export interface DwfViewerOptions extends BaseDwfViewerOptions, ColorContrastOptions {
   /**
    * Overrides vector, text and model-material colors with one fixed color.
    * Images, page background, geometry, line weights and opacity are preserved.
@@ -21,7 +22,7 @@ export interface DwfViewerOptions extends BaseDwfViewerOptions {
   monochromeColor?: string;
 }
 
-export interface LoadOptions extends BaseLoadOptions {
+export interface LoadOptions extends BaseLoadOptions, ColorContrastOptions {
   /** Per-load override for the viewer's monochrome color. */
   monochromeColor?: string;
 }
@@ -31,6 +32,7 @@ interface DwfViewerInternals {
   renderer?: PageRenderer;
   pageIndex: number;
   rendering: boolean;
+  background: string;
   requestRender(): void;
 }
 
@@ -42,10 +44,12 @@ export class DwfViewer extends BaseDwfViewer {
   private monochromeColor?: string;
   private preparedRenderer?: PageRenderer;
   private preparedColor?: string;
+  private contrastOptions: ColorContrastOptions;
 
   constructor(container: HTMLElement, options: DwfViewerOptions = {}) {
     super(container, options);
     this.monochromeColor = normalizeMonochromeColor(options.monochromeColor);
+    this.contrastOptions = { contrastMode: options.contrastMode, minColorContrast: options.minColorContrast };
   }
 
   override async load(
@@ -55,6 +59,8 @@ export class DwfViewer extends BaseDwfViewer {
     if (Object.prototype.hasOwnProperty.call(options, 'monochromeColor')) {
       this.updateMonochromeColor(options.monochromeColor, false);
     }
+    if (options.contrastMode !== undefined) this.contrastOptions.contrastMode = options.contrastMode;
+    if (options.minColorContrast !== undefined) this.contrastOptions.minColorContrast = options.minColorContrast;
     await super.load(input, options);
   }
 
@@ -67,6 +73,11 @@ export class DwfViewer extends BaseDwfViewer {
     return this.monochromeColor;
   }
 
+  setContrastOptions(options: Pick<ColorContrastOptions, 'contrastMode' | 'minColorContrast'>): void {
+    this.contrastOptions = { ...this.contrastOptions, ...options };
+    (this as unknown as DwfViewerInternals).requestRender();
+  }
+
   override async render(): Promise<RenderStats | undefined> {
     const internals = this as unknown as DwfViewerInternals;
 
@@ -76,20 +87,22 @@ export class DwfViewer extends BaseDwfViewer {
 
     const renderer = internals.renderer;
     const color = this.monochromeColor;
+    const contrast = { ...this.contrastOptions, background: internals.background };
+    const policy = color || contrastPolicyKey(contrast);
     if (renderer) {
-      if (this.preparedRenderer === renderer && this.preparedColor !== color) {
+      if (this.preparedRenderer === renderer && this.preparedColor !== policy) {
         renderer.dispose();
       }
       this.preparedRenderer = renderer;
-      this.preparedColor = color;
+      this.preparedColor = policy;
     }
 
     const doc = internals.doc;
     const pageIndex = internals.pageIndex;
     const sourcePage = doc?.pageData[pageIndex];
-    if (!color || !doc || !sourcePage) return super.render();
+    if ((!color && contrast.contrastMode !== 'adaptive') || !doc || !sourcePage) return super.render();
 
-    const renderedPage = createMonochromePage(sourcePage, color);
+    const renderedPage = color ? createMonochromePage(sourcePage, color) : createContrastPage(sourcePage, contrast);
     doc.pageData[pageIndex] = renderedPage;
 
     const opc = doc.opc;
@@ -97,7 +110,7 @@ export class DwfViewer extends BaseDwfViewer {
     if (opc && sourceReadText) {
       opc.readText = async (path: string) => {
         const xml = await sourceReadText.call(opc, path);
-        return applyXpsMonochromeXml(xml, color);
+        return color ? applyXpsMonochromeXml(xml, color) : applyXpsContrastXml(xml, contrast);
       };
     }
 
