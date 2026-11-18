@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.8 (candidate, not published)
+
+- Decode binary WHIP/W2D Gouraud polytriangle opcodes `0x07` (16-bit relative vertices) and `0x67` (32-bit relative vertices), including extended point counts and per-vertex RGBA colors.
+- Preserve Gouraud gradients in WebGL and Canvas rendering, including alpha, monochrome and adaptive contrast policies. Pages with gradients use Canvas when the flat-fill WASM backend is requested. Canvas uses pixel-center/top-left coverage to avoid alpha seams and rejects excessive raster work before painting.
+- Reject truncated Gouraud point sets before emitting geometry and retain the relative-point origin across hidden geometry.
+- Reproduced `flyfish-dev/cad-viewer#2` with the original AutoCAD 2021 attachment: the complete W2D stream now parses 82,063 primitives and 84,628 opcodes with no unsupported-opcode diagnostics; the previous parser stopped after 905 primitives at byte 18,429.
+- Add eleven Gouraud parser, rendering, bounded-work and color-policy regression tests to the publish gate. The original attachment remains external; the committed regression uses only the minimal byte sequence published in the issue.
+
 ## 0.6.7 (candidate, not published)
 
 - Add optional adaptive contrast for native W2D and XPS vector/text colors on dark or light backgrounds.

@@ -126,6 +126,9 @@ class BinaryW2dParser {
       case 0x06: // set font
         this.readBinaryFont();
         return true;
+      case 0x07: // Gouraud polytriangle, 16-bit relative vertices and RGBA colors
+        this.gouraudPolytriangles(16);
+        return true;
       case 0x0c: { // draw line, 16-bit relative
         const pts = [this.point16Relative(), this.point16Relative()];
         this.polyline(pts);
@@ -211,6 +214,9 @@ class BinaryW2dParser {
       case 'f':
         this.state.fillOn = false;
         this.state.fill = undefined;
+        return true;
+      case 'g': // Gouraud polytriangle, 32-bit relative vertices and RGBA colors
+        this.gouraudPolytriangles(32);
         return true;
       case 'L': {
         const pts = [this.readAsciiPoint(), this.readAsciiPoint()];
@@ -368,6 +374,31 @@ class BinaryW2dParser {
     if (!this.state.visible || pts.length < 3) return;
     for (let i = 0; i + 2 < pts.length; i++) {
       this.polygon([pts[i]!, pts[i + 1]!, pts[i + 2]!], this.state.stroke, undefined);
+    }
+  }
+
+  private gouraudPolytriangles(bits: 16 | 32): void {
+    const count = this.readCount();
+    const bytesPerVertex = bits === 16 ? 8 : 12;
+    if (count < 3 || count > Math.floor(this.remaining() / bytesPerVertex)) {
+      throw new Error('Invalid or truncated Gouraud polytriangle point set.');
+    }
+    const points: Point[] = [];
+    const colors: string[] = [];
+    for (let i = 0; i < count; i++) {
+      points.push(bits === 16 ? this.point16Relative() : this.point32Relative());
+      colors.push(rgba(this.u8(), this.u8(), this.u8(), this.u8()));
+    }
+    if (!this.state.visible) return;
+    for (let i = 0; i + 2 < count; i++) {
+      const vertexColors = colors.slice(i, i + 3);
+      const solid = vertexColors.every(color => color === vertexColors[0]);
+      this.primitives.push({
+        type: 'polygon',
+        points: flattenPoints(points.slice(i, i + 3)),
+        fill: vertexColors[0],
+        ...(solid ? {} : { vertexColors })
+      });
     }
   }
 

@@ -112,6 +112,9 @@ function monochromePrimitive(primitive: W2dPrimitive, color: string): W2dPrimiti
   const next = { ...primitive } as W2dPrimitive;
   if (primitive.stroke !== undefined) next.stroke = monochromeColorWithAlpha(color, primitive.stroke);
   if (primitive.fill !== undefined) next.fill = monochromeColorWithAlpha(color, primitive.fill);
+  if (primitive.type === 'polygon' && next.type === 'polygon' && primitive.vertexColors) {
+    next.vertexColors = primitive.vertexColors.map(source => monochromeColorWithAlpha(color, source));
+  }
 
   // W2D polylines and text have an implicit black fallback in the renderer.
   // Materialize that fallback so a white/custom monochrome target works too.

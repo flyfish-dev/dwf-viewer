@@ -290,7 +290,14 @@ function appendPrimitive(writer: VertexWriter, p: Exclude<W2dPrimitive, { type: 
     appendPolyline(writer, transformPointsArray(p.points, m), lineWidth, color);
   } else if (p.type === 'polygon') {
     const pts = transformPointsArray(p.points, m);
-    if (p.fill) appendPolygonFan(writer, pts, rgbaBytes(p.fill));
+    if (p.vertexColors?.length === pts.length) {
+      for (let i = 1; i + 1 < pts.length; i++) {
+        if (triangleAreaAbs(pts[0]!, pts[i]!, pts[i + 1]!) < 1e-6) continue;
+        for (const index of [0, i, i + 1]) {
+          writer.push(pts[index]!.x, pts[index]!.y, rgbaBytes(p.vertexColors[index]));
+        }
+      }
+    } else if (p.fill) appendPolygonFan(writer, pts, rgbaBytes(p.fill));
     if (p.stroke) appendPolyline(writer, closePoints(pts), lineWidth, rgbaBytes(p.stroke));
   } else if (p.type === 'rect') {
     const pts = transformPointsArray([

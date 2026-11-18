@@ -6,6 +6,7 @@ import { adaptiveStrokeUserWidth, canvasDpr, estimateMatrixScale, shouldDrawText
 import { matrixForW2d } from './viewport.js';
 import { WasmRasterBackend } from '../wasm/WasmRasterBackend.js';
 import { WebGlW2dBackend } from './WebGlW2dBackend.js';
+import { drawGouraudTriangle, gouraudRasterBounds, MAX_CANVAS_GOURAUD_PIXELS } from './gouraud.js';
 
 export interface W2dRenderOptions extends CadLineStyleOptions {
   zoom?: number;
@@ -51,7 +52,10 @@ export class W2dRenderer {
     const runtime = { dpr: canvasDpr(canvas), zoom: options.zoom ?? 1 };
     let commands = 0;
 
-    if (options.preferWasm) {
+    // The flat-fill WASM backend cannot interpolate per-vertex colors. Keep
+    // the original paint order and use Canvas for the whole page in that case.
+    const hasGouraud = page.primitives.some(p => p.type === 'polygon' && p.vertexColors);
+    if (options.preferWasm && !hasGouraud) {
       try {
         this.wasm ??= new WasmRasterBackend({ wasmUrl: options.wasmUrl });
         await this.wasm.init();
@@ -66,6 +70,18 @@ export class W2dRenderer {
       }
     }
 
+    // Reject an excessive fallback before painting any part of the page.
+    let gouraudPixels = 0;
+    for (const p of page.primitives) {
+      if (p.type !== 'polygon' || p.vertexColors?.length !== p.points.length / 2) continue;
+      const matrix = multiplyMatrix(pageMatrix, p.matrix ?? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+      for (let i = 1; i + 1 < p.vertexColors.length; i++) {
+        const points = [0, i, i + 1].flatMap(index => transformPoint(matrix, p.points[index * 2]!, p.points[index * 2 + 1]!));
+        const bounds = gouraudRasterBounds(points, canvas.width, canvas.height);
+        gouraudPixels += bounds ? bounds.width * bounds.height : 0;
+        if (gouraudPixels > MAX_CANVAS_GOURAUD_PIXELS) throw new Error('Canvas Gouraud frame pixel budget exceeded. Use WebGL or reduce the viewport.');
+      }
+    }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = bg;
@@ -94,6 +110,16 @@ export class W2dRenderer {
     const matrix = multiplyMatrix(pageMatrix, p.matrix ?? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
     const stroke = parseBrushColor(p.stroke ?? '#000000') ?? '#000000';
     const fill = parseBrushColor(p.fill);
+    let gouraudFilled = false;
+    if (p.type === 'polygon' && p.vertexColors?.length === p.points.length / 2) {
+      for (let i = 1; i + 1 < p.vertexColors.length; i++) {
+        const indices = [0, i, i + 1];
+        const points = indices.flatMap(index => transformPoint(matrix, p.points[index * 2]!, p.points[index * 2 + 1]!));
+        drawGouraudTriangle(ctx, points, indices.map(index => p.vertexColors![index]!));
+      }
+      gouraudFilled = true;
+      if (!p.stroke) return 1;
+    }
     if (p.type === 'text') {
       const [x, y] = transformPoint(matrix, p.x, p.y);
       const screenSize = Math.max(1, Math.abs((p.size ?? 12) * estimateScale(matrix)));
@@ -124,7 +150,7 @@ export class W2dRenderer {
         ctx.moveTo(p.points[0]!, p.points[1]!);
         for (let i = 2; i + 1 < p.points.length; i += 2) ctx.lineTo(p.points[i]!, p.points[i + 1]!);
         ctx.closePath();
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (fill && !gouraudFilled) { ctx.fillStyle = fill; ctx.fill(); }
         if (p.stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
       }
     } else if (p.type === 'rect') {

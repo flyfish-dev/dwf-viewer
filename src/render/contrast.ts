@@ -69,6 +69,9 @@ export function createContrastPage(page: PageData, options: ColorContrastOptions
       const next = { ...primitive };
       if (primitive.stroke !== undefined) next.stroke = adaptiveContrastColor(primitive.stroke, options);
       if (primitive.fill !== undefined) next.fill = adaptiveContrastColor(primitive.fill, options);
+      if (primitive.type === 'polygon' && next.type === 'polygon' && primitive.vertexColors) {
+        next.vertexColors = primitive.vertexColors.map(color => adaptiveContrastColor(color, options));
+      }
       if (primitive.type === 'polyline' && primitive.stroke === undefined) next.stroke = adaptiveContrastColor('#000000', options);
       if (primitive.type === 'text' && primitive.fill === undefined && primitive.stroke === undefined) next.fill = adaptiveContrastColor('#000000', options);
       return next;
