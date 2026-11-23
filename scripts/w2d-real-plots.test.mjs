@@ -53,24 +53,28 @@ test('object nodes (0x0e) and symbol records (0x8d, m, M, G, S, s) are read, and
     Buffer.from([0x0e]),
     Buffer.from([0x8d, 2]), i16(1, 1, 2, 2),
     Buffer.from([0x6d, 1]), i32(3, 3),
-    Buffer.from('M 1 7,7 G 4 S 100'),
-    Buffer.from([0x73]), i32(50),
+    Buffer.from('M 1 7,7 G 4'),
   ]);
   const result = parse(records, line16);
   assert.deepEqual(result.unsupportedOpcodes, []);
   assert.equal(result.primitives.length, 1);
   const note = result.diagnostics.find(d => d.code === 'W2D_MACRO_NOT_DRAWN');
-  assert.equal(note.level, 'info'); // the stream defines no symbol, so nothing is missing
-  assert.match(note.message, /^4 symbol placement\(s\); 0 symbol definition/);
+  assert.equal(note.level, 'info'); // V06.00 markers at the default size 0 are single pixels; no symbol is defined
+  assert.match(note.message, /^4 visible symbol placement\(s\), 0 with a marker size; 0 symbol definition/);
   // Relative placements advance the current point (1,1), (3,3), (6,6); the ASCII one is absolute and does not.
   assert.deepEqual(result.primitives[0].points, [7, 8, 10, 12]);
 });
 
-test('symbol placements in a stream that defines symbols are a warning', () => {
-  const result = parse(Buffer.from('(Macro 1 100 (L 0,0 10,10))'), Buffer.from([0x8d, 1]), i16(5, 5), line16);
-  const note = result.diagnostics.find(d => d.code === 'W2D_MACRO_NOT_DRAWN');
-  assert.equal(note.level, 'warning');
-  assert.match(note.message, /1 symbol definition/);
+test('symbol placements are a warning only when something visible is lost', () => {
+  const level = (version, ...parts) => parseW2dBinary(Buffer.concat([Buffer.from(`(W2D V${version})`), ...parts, Buffer.from('(EndOfDWF)')]), 'm.w2d')
+    .diagnostics.find(d => d.code === 'W2D_MACRO_NOT_DRAWN')?.level;
+  const place = Buffer.concat([Buffer.from([0x8d, 1]), i16(5, 5)]);
+  assert.equal(level('06.00', Buffer.from('S 100'), place), 'warning'); // a sized built-in marker before 6.01
+  assert.equal(level('06.00', Buffer.concat([Buffer.from([0x73]), i32(40)]), place), 'warning');
+  assert.equal(level('06.00', Buffer.from('S 100v'), place, Buffer.from('V')), undefined); // hidden: nothing counted
+  assert.equal(level('06.01', Buffer.from('S 100'), place), 'info'); // a macro scale, and no macro defined
+  assert.equal(level('06.01', Buffer.from('(Macro 1 100 (L 0,0 10,10))'), place), 'warning');
+  assert.equal(level('06.00', Buffer.from('(Glyph 1 0,0 10 (L 0,0 10,10))'), place), 'warning');
 });
 
 test('flatGouraud fills a colour-shaded triangle with its average colour, without a raster canvas', () => {

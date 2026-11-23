@@ -49,6 +49,8 @@ class BinaryW2dParser {
   private readonly unsupportedOpcodes: Array<{ offset: number; opcode: number | string; message: string }> = [];
   private opcodes = 0;
   private macroPoints = 0;
+  private sizedMarkerPoints = 0;
+  private markerSize = 0;
   private macroDefinitions = 0;
   private decimalRevision = 600;
 
@@ -101,10 +103,12 @@ class BinaryW2dParser {
       this.diagnostics.push(diag('warning', 'W2D_BINARY_NO_GEOMETRY', 'Binary WHIP!/W2D parser did not emit supported geometry.', this.sourcePath));
     }
     if (this.macroPoints > 0) {
-      // Without a symbol definition ("(Macro ...") there is nothing to draw at the placements: report it as
-      // information. With definitions, the symbols are missing from the page: a warning.
-      const level = this.macroDefinitions > 0 ? 'warning' : 'info';
-      this.diagnostics.push(diag(level, 'W2D_MACRO_NOT_DRAWN', `${this.macroPoints} symbol placement(s); ${this.macroDefinitions} symbol definition(s) in the stream, not drawn.`, this.sourcePath));
+      // A placement draws a symbol the stream defines ("(Macro ..." from revision 6.01, "(Glyph ..." before) or, before
+      // 6.01, a built-in marker glyph at the current marker size, which at size 0 (the default) is a single pixel. Those
+      // symbols are missing from the page (a warning) when one was defined or a marker had a size; otherwise nothing
+      // visible is lost (information).
+      const missing = this.macroDefinitions > 0 || (this.decimalRevision < 601 && this.sizedMarkerPoints > 0);
+      this.diagnostics.push(diag(missing ? 'warning' : 'info', 'W2D_MACRO_NOT_DRAWN', `${this.macroPoints} visible symbol placement(s), ${this.sizedMarkerPoints} with a marker size; ${this.macroDefinitions} symbol definition(s) in the stream; not drawn.`, this.sourcePath));
     }
     if (this.unsupportedOpcodes.length > 0) {
       const first = this.unsupportedOpcodes[0]!;
@@ -242,7 +246,7 @@ class BinaryW2dParser {
         this.macroDraw(this.pointSetAscii());
         return true;
       case 'S': // macro scale (marker size before revision 6.01), ASCII integer
-        this.readAsciiInteger();
+        this.markerSize = this.readAsciiInteger();
         return true;
       case 'k': // contour set, 32-bit relative points
         this.contourSet(32);
@@ -254,7 +258,7 @@ class BinaryW2dParser {
         this.gouraudPolyline(32);
         return true;
       case 's': // macro scale (marker size before revision 6.01), int32
-        this.i32();
+        this.markerSize = this.i32();
         return true;
       case 'g': // Gouraud polytriangle, 32-bit relative vertices and RGBA colors
         this.gouraudPolytriangles(32);
@@ -346,6 +350,7 @@ class BinaryW2dParser {
         break;
       }
       case '(Macro':
+      case '(Glyph':
         this.macroDefinitions++;
         break;
       case '(EndOfDWF':
@@ -493,8 +498,11 @@ class BinaryW2dParser {
   }
 
   private macroDraw(pts: Point[]): void {
-    // Symbol placements. The symbol definitions are not drawn yet, so they are counted and reported.
+    // Symbol placements are read (their points move the current point) but not drawn yet: count the visible ones, and
+    // those made while a marker size is set (before revision 6.01 that draws a built-in glyph at that size).
+    if (!this.state.visible) return;
     this.macroPoints += pts.length;
+    if (this.markerSize > 0) this.sizedMarkerPoints += pts.length;
   }
 
   private polyline(pts: Point[]): void {
