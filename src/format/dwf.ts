@@ -64,7 +64,8 @@ export async function openClassicDwf(zip: ZipPackage): Promise<LoadedDwfDocument
       const primitives: W2dPrimitive[] = [];
       try {
         const parsed = await parseW2dResource(zip, mainGraphic.path);
-        primitives.push(...parsed.primitives);
+        // A loop, not push(...items): a sheet of about a million items overflowed the call stack on Node 20.
+        for (const primitive of parsed.primitives) primitives.push(primitive);
         pageDiagnostics.push(...parsed.diagnostics);
       } catch (err) {
         pageDiagnostics.push(diag('warning', 'DWF_W2D_READ_FAILED', `Failed to read or parse ${mainGraphic.path}: ${String(err)}`, mainGraphic.path));
@@ -74,7 +75,7 @@ export async function openClassicDwf(zip: ZipPackage): Promise<LoadedDwfDocument
         if (!zip.has(markupXml.path)) continue;
         try {
           const parsed = parseMarkupPrivateXml(decodeUtf8(await zip.read(markupXml.path)), markupXml.path, descriptor.w2dTransform);
-          primitives.push(...parsed.primitives);
+          for (const primitive of parsed.primitives) primitives.push(primitive);
           pageDiagnostics.push(...parsed.diagnostics);
         } catch (err) {
           pageDiagnostics.push(diag('warning', 'DWF_MARKUP_XML_PARSE_FAILED', `Failed to parse markup private XML: ${String(err)}`, markupXml.path));

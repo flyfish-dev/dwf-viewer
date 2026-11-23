@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Skip extended binary WHIP objects by their size minus the 2-byte opcode: the size counts the opcode, the payload and the closing `}` (WHIP! specification). Skipping the full size landed 2 bytes into the next instruction, and the parser stopped there with an unknown single-byte opcode.
+- Decode the single-byte opcodes found in AutoCAD-plotted DWF 6 sheets that stopped the parser: contour sets `0x0b`/`k` (one even-odd filled path, holes included), Gouraud polylines `0x11`/`q` (segments in their vertex colours), automatic object nodes `0x0e`, and symbol records — macro draw / polymarker `0x8d`/`m`/`M`, macro index `G` and macro scale `S`/`s`. Symbol placements are not drawn; `W2D_MACRO_NOT_DRAWN` reports them, as a warning only when the stream defines symbols (`(Macro ...)`).
+- Do not spread a sheet's primitives into one `push()` call: on Node 20 a sheet of about a million primitives overflowed the call stack and fell back to its thumbnail.
+- Resolve absolute XPS part names (`ImageSource`, `FontUri`) from the package root, falling back to the page folder: raster images such as scanned sheets were not found.
+- `flatGouraud` render option: fill Gouraud triangles with the average vertex colour instead of rasterising them, for contexts without a document to create a raster canvas in (vector exports); paths may carry `fillRule: 'evenodd'`.
+- On 13 real plotted drawings (8 DWF, 5 DWFx), 7 DWF streams stopped early before (between 0% and 48% read, one at 99.8%); all now parse to their end with no unsupported-opcode diagnostics. Regression tests: `scripts/w2d-real-plots.test.mjs`, built from synthetic byte sequences only.
+
 ## 0.6.8 (candidate, not published)
 
 - Decode binary WHIP/W2D Gouraud polytriangle opcodes `0x07` (16-bit relative vertices) and `0x67` (32-bit relative vertices), including extended point counts and per-vertex RGBA colors.
