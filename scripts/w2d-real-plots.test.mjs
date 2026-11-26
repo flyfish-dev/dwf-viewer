@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseW2dBinary } from '../dist/format/w2dBinary.js';
 import { W2dRenderer } from '../dist/render/W2dRenderer.js';
+import { WasmRasterBackend } from '../dist/wasm/WasmRasterBackend.js';
 
 // Records found in AutoCAD-plotted DWF 6 sheets. Before these fixes the parser stopped at the first of them, and
 // everything after it was missing from the page.
@@ -94,4 +95,26 @@ test('a path may ask for the even-odd fill rule', () => {
   new W2dRenderer().drawPrimitiveCanvas(ctx, p, { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, {}, { dpr: 1, zoom: 1 });
   new W2dRenderer().drawPrimitiveCanvas(ctx, { ...p, fillRule: undefined }, { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, {}, { dpr: 1, zoom: 1 });
   assert.deepEqual(rules, ['evenodd', 'nonzero']);
+});
+
+test('a filled contour set uses Canvas when accelerators cannot preserve its holes', async t => {
+  const contours = Buffer.concat([Buffer.from([0x0b, 2, 4, 3]), i16(0, 0, 10, 0, 0, 10, -10, 0), i16(2, -8, 4, 0, 0, 4)]);
+  const { primitives, diagnostics } = parse(Buffer.from('F'), contours, line16);
+  const page = { sourcePath: 'plot.w2d', width: 10, height: 10, primitives, diagnostics };
+  const paint = [];
+  const ctx = {
+    save() {}, restore() {}, setTransform() {}, fillRect() {}, beginPath() {},
+    moveTo() {}, lineTo() {}, closePath() {}, fill(rule) { paint.push(rule); },
+    stroke() { paint.push('line'); }
+  };
+  const canvas = { width: 40, height: 40, style: {}, getContext: type => type === '2d' ? ctx : null };
+  const webglCanvas = { style: {}, getContext: t.mock.fn(() => null) };
+  const wasmInit = t.mock.method(WasmRasterBackend.prototype, 'init', async () => {
+    throw new Error('WASM must not be attempted for even-odd fills');
+  });
+  const result = await new W2dRenderer().render(page, canvas, { webglCanvas, preferWasm: true });
+  assert.equal(result.backend, 'canvas2d');
+  assert.equal(webglCanvas.getContext.mock.callCount(), 0);
+  assert.equal(wasmInit.mock.callCount(), 0);
+  assert.deepEqual(paint, ['evenodd', 'line']);
 });

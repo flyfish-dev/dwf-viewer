@@ -34,8 +34,11 @@ export class W2dRenderer {
   async render(page: W2dTextPageData, canvas: HTMLCanvasElement, options: W2dRenderOptions = {}): Promise<RenderStats> {
     const warnings: Diagnostic[] = actionableDiagnostics(page.diagnostics);
     const bg = options.background ?? '#ffffff';
+    // The accelerated paths fill each contour separately. Canvas applies
+    // even-odd parity across the whole path without changing paint order.
+    const hasEvenOddFill = page.primitives.some(p => p.type === 'path' && p.fill && p.fillRule === 'evenodd');
 
-    if (options.preferWebgl ?? true) {
+    if ((options.preferWebgl ?? true) && !hasEvenOddFill) {
       try {
         const backend = this.getWebGlBackend(options.webglCanvas);
         if (options.webglCanvas) options.webglCanvas.style.visibility = 'visible';
@@ -60,7 +63,7 @@ export class W2dRenderer {
     // The flat-fill WASM backend cannot interpolate per-vertex colors. Keep
     // the original paint order and use Canvas for the whole page in that case.
     const hasGouraud = page.primitives.some(p => p.type === 'polygon' && p.vertexColors);
-    if (options.preferWasm && !hasGouraud) {
+    if (options.preferWasm && !hasGouraud && !hasEvenOddFill) {
       try {
         this.wasm ??= new WasmRasterBackend({ wasmUrl: options.wasmUrl });
         await this.wasm.init();
