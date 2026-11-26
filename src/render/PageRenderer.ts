@@ -21,6 +21,8 @@ export interface GenericRenderOptions {
   maxGpuCacheBytes?: number;
   maxCachedScenes?: number;
   webglCanvas?: HTMLCanvasElement;
+  /** See W2dRenderOptions.flatGouraud. */
+  flatGouraud?: boolean;
   yaw?: number;
   pitch?: number;
 }

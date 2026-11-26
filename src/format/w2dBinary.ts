@@ -1,5 +1,6 @@
 import { diag, type Diagnostic } from './types.js';
 import type { W2dPrimitive } from './document.js';
+import type { PathCommand } from '../render/xpsPath.js';
 
 export interface W2dBinaryParseResult {
   primitives: W2dPrimitive[];
@@ -47,6 +48,10 @@ class BinaryW2dParser {
   private readonly diagnostics: Diagnostic[] = [];
   private readonly unsupportedOpcodes: Array<{ offset: number; opcode: number | string; message: string }> = [];
   private opcodes = 0;
+  private macroPoints = 0;
+  private sizedMarkerPoints = 0;
+  private markerSize = 0;
+  private macroDefinitions = 0;
   private decimalRevision = 600;
 
   private state: ParseState = {
@@ -97,6 +102,14 @@ class BinaryW2dParser {
     } else {
       this.diagnostics.push(diag('warning', 'W2D_BINARY_NO_GEOMETRY', 'Binary WHIP!/W2D parser did not emit supported geometry.', this.sourcePath));
     }
+    if (this.macroPoints > 0) {
+      // A placement draws a symbol the stream defines ("(Macro ..." from revision 6.01, "(Glyph ..." before) or, before
+      // 6.01, a built-in marker glyph at the current marker size, which at size 0 (the default) is a single pixel. Those
+      // symbols are missing from the page (a warning) when one was defined or a marker had a size; otherwise nothing
+      // visible is lost (information).
+      const missing = this.macroDefinitions > 0 || (this.decimalRevision < 601 && this.sizedMarkerPoints > 0);
+      this.diagnostics.push(diag(missing ? 'warning' : 'info', 'W2D_MACRO_NOT_DRAWN', `${this.macroPoints} visible symbol placement(s), ${this.sizedMarkerPoints} with a marker size; ${this.macroDefinitions} symbol definition(s) in the stream; not drawn.`, this.sourcePath));
+    }
     if (this.unsupportedOpcodes.length > 0) {
       const first = this.unsupportedOpcodes[0]!;
       this.diagnostics.push(diag('warning', 'W2D_BINARY_PARTIAL', `${this.unsupportedOpcodes.length} unsupported opcode(s); first at byte ${first.offset}: ${first.message}`, this.sourcePath));
@@ -129,16 +142,24 @@ class BinaryW2dParser {
       case 0x07: // Gouraud polytriangle, 16-bit relative vertices and RGBA colors
         this.gouraudPolytriangles(16);
         return true;
+      case 0x0b: // contour set, 16-bit relative points
+        this.contourSet(16);
+        return true;
       case 0x0c: { // draw line, 16-bit relative
         const pts = [this.point16Relative(), this.point16Relative()];
         this.polyline(pts);
         return true;
       }
+      case 0x0e: // object node, auto-increment: no operand
+        return true;
       case 0x10: { // polyline/polygon, 16-bit relative pointset
         const pts = this.pointSet16Relative();
         this.pointSetPrimitive(pts);
         return true;
       }
+      case 0x11: // Gouraud polyline, 16-bit relative vertices and RGBA colors
+        this.gouraudPolyline(16);
+        return true;
       case 0x12: { // full circle, 16-bit relative center + uint16 radius
         const center = this.point16Relative();
         const radius = this.u16();
@@ -159,6 +180,9 @@ class BinaryW2dParser {
         this.skipComplexTextOptions();
         return true;
       }
+      case 0x8d: // macro draw (polymarker before revision 6.01), 16-bit relative pointset
+        this.macroDraw(this.pointSet16Relative());
+        return true;
       case 0x92: { // partial circle, 32-bit relative center + radius + short start/end angles
         const center = this.point32Relative();
         const radius = this.u32();
@@ -214,6 +238,27 @@ class BinaryW2dParser {
       case 'f':
         this.state.fillOn = false;
         this.state.fill = undefined;
+        return true;
+      case 'G': // macro index (marker symbol before revision 6.01), ASCII integer
+        this.readAsciiInteger();
+        return true;
+      case 'M': // macro draw (polymarker before revision 6.01), ASCII pointset
+        this.macroDraw(this.pointSetAscii());
+        return true;
+      case 'S': // macro scale (marker size before revision 6.01), ASCII integer
+        this.markerSize = this.readAsciiInteger();
+        return true;
+      case 'k': // contour set, 32-bit relative points
+        this.contourSet(32);
+        return true;
+      case 'm': // macro draw (polymarker before revision 6.01), 32-bit relative pointset
+        this.macroDraw(this.pointSet32Relative());
+        return true;
+      case 'q': // Gouraud polyline, 32-bit relative vertices and RGBA colors
+        this.gouraudPolyline(32);
+        return true;
+      case 's': // macro scale (marker size before revision 6.01), int32
+        this.markerSize = this.i32();
         return true;
       case 'g': // Gouraud polytriangle, 32-bit relative vertices and RGBA colors
         this.gouraudPolytriangles(32);
@@ -304,6 +349,10 @@ class BinaryW2dParser {
         if (name) this.state.fontName = name;
         break;
       }
+      case '(Macro':
+      case '(Glyph':
+        this.macroDefinitions++;
+        break;
       case '(EndOfDWF':
         this.pos = this.bytes.length;
         break;
@@ -317,15 +366,18 @@ class BinaryW2dParser {
     if (this.remaining() < 6) return false;
     const size = this.u32();
     const opcode = this.u16();
+    // The size counts the 2-byte opcode, the payload and the closing '}' (WHIP! specification, "The Extended binary
+    // opcode"), so the object ends size - 2 bytes after the opcode.
+    const end = this.pos + size - 2;
     if (opcode === 0x0011 || opcode === 0x0010 || opcode === 0x0123) {
       this.unsupportedOpcodes.push({ offset: start, opcode: `{${opcode.toString(16)}}`, message: 'Embedded compressed WHIP block detected. This build renders uncompressed binary W2D streams and manifest markup XML; compressed nested blocks are skipped.' });
       // In many markup W2D resources the compressed block length is zero and the rest of the resource is the payload.
-      this.pos = size > 0 && this.pos + size <= this.bytes.length ? this.pos + size : this.bytes.length;
+      this.pos = size >= 2 && end <= this.bytes.length ? end : this.bytes.length;
       return true;
     }
-    // Most extended binary objects carry an offset/length-like field. If it is non-zero and plausible, skip it.
-    if (size > 0 && this.pos + size <= this.bytes.length) {
-      this.pos += size;
+    // Any other extended binary object is skipped by its size; zero means its writer could not compute it.
+    if (size >= 2 && end <= this.bytes.length) {
+      this.pos = end;
       return true;
     }
     this.unsupportedOpcodes.push({ offset: start, opcode: `{${opcode.toString(16)}}`, message: 'Unsupported extended binary WHIP object with unknown payload size.' });
@@ -400,6 +452,57 @@ class BinaryW2dParser {
         ...(solid ? {} : { vertexColors })
       });
     }
+  }
+
+  private contourSet(bits: 16 | 32): void {
+    const contours = this.readCount();
+    const counts: number[] = [];
+    let total = 0;
+    for (let i = 0; i < contours; i++) {
+      const n = this.readCount();
+      counts.push(n);
+      total += n;
+    }
+    if (total > Math.floor(this.remaining() / (bits === 16 ? 4 : 8))) {
+      throw new Error('Invalid or truncated contour set.');
+    }
+    const commands: PathCommand[] = [];
+    for (const n of counts) {
+      for (let i = 0; i < n; i++) {
+        const p = bits === 16 ? this.point16Relative() : this.point32Relative();
+        commands.push({ type: i === 0 ? 'M' : 'L', x: p.x, y: p.y });
+      }
+      if (n > 0) commands.push({ type: 'Z' });
+    }
+    if (!this.state.visible || commands.length === 0) return;
+    // A contour set is one filled region whose inner contours are holes.
+    this.primitives.push({ type: 'path', commands, fill: this.state.fill ?? this.state.stroke, fillRule: 'evenodd' });
+  }
+
+  private gouraudPolyline(bits: 16 | 32): void {
+    const count = this.readCount();
+    if (count > Math.floor(this.remaining() / (bits === 16 ? 8 : 12))) {
+      throw new Error('Invalid or truncated Gouraud polyline point set.');
+    }
+    const points: Point[] = [];
+    const colors: string[] = [];
+    for (let i = 0; i < count; i++) {
+      points.push(bits === 16 ? this.point16Relative() : this.point32Relative());
+      colors.push(rgba(this.u8(), this.u8(), this.u8(), this.u8()));
+    }
+    if (!this.state.visible) return;
+    // Each segment in the colour of its first vertex: a stepped approximation of the colour ramp.
+    for (let i = 0; i + 1 < count; i++) {
+      this.primitives.push({ type: 'polyline', points: flattenPoints([points[i]!, points[i + 1]!]), stroke: colors[i]!, lineWidth: this.state.lineWidth });
+    }
+  }
+
+  private macroDraw(pts: Point[]): void {
+    // Symbol placements are read (their points move the current point) but not drawn yet: count the visible ones, and
+    // those made while a marker size is set (before revision 6.01 that draws a built-in glyph at that size).
+    if (!this.state.visible) return;
+    this.macroPoints += pts.length;
+    if (this.markerSize > 0) this.sizedMarkerPoints += pts.length;
   }
 
   private polyline(pts: Point[]): void {

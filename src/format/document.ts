@@ -31,7 +31,7 @@ export interface W2dPrimitiveBase {
 export type W2dPrimitive =
   | (W2dPrimitiveBase & { type: 'polyline'; points: number[] })
   | (W2dPrimitiveBase & { type: 'polygon'; points: number[]; vertexColors?: string[] })
-  | (W2dPrimitiveBase & { type: 'path'; commands: PathCommand[] })
+  | (W2dPrimitiveBase & { type: 'path'; commands: PathCommand[]; fillRule?: 'nonzero' | 'evenodd' })
   | (W2dPrimitiveBase & { type: 'text'; x: number; y: number; text: string; size?: number })
   | (W2dPrimitiveBase & { type: 'rect'; x: number; y: number; width: number; height: number });
 

@@ -1,5 +1,6 @@
 import { actionableDiagnostics, diag, type Diagnostic, type RenderStats } from '../format/types.js';
 import type { LoadedDwfDocument, XpsPageData } from '../format/document.js';
+import type { OpcPackageView } from '../format/opc.js';
 import { childElements, getAttr, localName, parseNumberList, parseXml, resolvePart, blobToImage, mimeFromPath } from '../format/util.js';
 import { applyPathToCanvas, flattenPath, parsePathData, type PathCommand } from './xpsPath.js';
 import { IDENTITY, multiplyMatrix, parseBrushColor, parseMatrix, type Matrix2D } from './style.js';
@@ -267,7 +268,7 @@ export class XpsRenderer {
   private async fontFamilyForGlyphs(pagePath: string, el: Element, warnings: Diagnostic[]): Promise<string | undefined> {
     const uri = getAttr(el, 'FontUri');
     if (!uri) return undefined;
-    const part = resolvePart(pagePath, uri.replace(/^\//, ''));
+    const part = resolvePagePart(this.document.opc!, pagePath, uri);
     // XPS/DWFx often stores embedded TrueType fonts as ODTTF.
     // Deobfuscate and load them so overview text matches CAD viewers instead
     // of falling back to thick system fonts.
@@ -309,7 +310,7 @@ export class XpsRenderer {
 
   private async drawImageResource(ctx: CanvasRenderingContext2D, pagePath: string, source: string, matrix: Matrix2D, opacity: number, el: Element): Promise<void> {
     const opc = this.document.opc!;
-    const src = resolvePart(pagePath, source.replace(/^\//, ''));
+    const src = resolvePagePart(opc, pagePath, source);
     const bytes = await opc.readBytes(src);
     const image = await blobToImage(bytes, opc.getContentType(src) ?? mimeFromPath(src) ?? 'image/png');
     const width = Number(getAttr(el, 'Width') ?? ('width' in image ? image.width : 0));
@@ -325,7 +326,7 @@ export class XpsRenderer {
 
   private async drawImageBrush(ctx: CanvasRenderingContext2D, pagePath: string, source: string, matrix: Matrix2D, opacity: number, pathEl: Element, brushEl: Element): Promise<void> {
     const opc = this.document.opc!;
-    const src = resolvePart(pagePath, source.replace(/^\//, ''));
+    const src = resolvePagePart(opc, pagePath, source);
     const bytes = await opc.readBytes(src);
     const image = await blobToImage(bytes, opc.getContentType(src) ?? mimeFromPath(src) ?? 'image/png');
     const viewport = parseRect(getAttr(brushEl, 'Viewport')) ?? parseRect(getAttr(brushEl, 'Viewbox')) ?? [0, 0, Number((image as HTMLImageElement).width ?? 1), Number((image as HTMLImageElement).height ?? 1)];
@@ -540,4 +541,15 @@ function parseRect(s?: string): [number, number, number, number] | undefined {
   const nums = parseNumberList(s);
   if (nums.length >= 4) return [nums[0]!, nums[1]!, nums[2]!, nums[3]!];
   return undefined;
+}
+
+/**
+ * An absolute part name ('/...', an ImageSource or FontUri) names a part from the package root. Writers that put a
+ * leading slash on a page-relative name still resolve against the page's folder.
+ */
+function resolvePagePart(opc: OpcPackageView, pagePath: string, source: string): string {
+  const absolute = resolvePart(pagePath, source);
+  if (!source.startsWith('/') || opc.zip.has(absolute)) return absolute;
+  const relative = resolvePart(pagePath, source.replace(/^\//, ''));
+  return opc.zip.has(relative) ? relative : absolute;
 }

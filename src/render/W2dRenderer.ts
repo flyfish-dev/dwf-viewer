@@ -19,6 +19,11 @@ export interface W2dRenderOptions extends CadLineStyleOptions {
   maxGpuCacheBytes?: number;
   maxCachedScenes?: number;
   webglCanvas?: HTMLCanvasElement;
+  /**
+   * Fill each Gouraud triangle with the average of its vertex colours instead of rasterising it. For contexts without
+   * a document to create a raster canvas in, such as a vector (PDF/SVG) export; the raster pixel budget does not apply.
+   */
+  flatGouraud?: boolean;
 }
 
 export class W2dRenderer {
@@ -29,8 +34,11 @@ export class W2dRenderer {
   async render(page: W2dTextPageData, canvas: HTMLCanvasElement, options: W2dRenderOptions = {}): Promise<RenderStats> {
     const warnings: Diagnostic[] = actionableDiagnostics(page.diagnostics);
     const bg = options.background ?? '#ffffff';
+    // The accelerated paths fill each contour separately. Canvas applies
+    // even-odd parity across the whole path without changing paint order.
+    const hasEvenOddFill = page.primitives.some(p => p.type === 'path' && p.fill && p.fillRule === 'evenodd');
 
-    if (options.preferWebgl ?? true) {
+    if ((options.preferWebgl ?? true) && !hasEvenOddFill) {
       try {
         const backend = this.getWebGlBackend(options.webglCanvas);
         if (options.webglCanvas) options.webglCanvas.style.visibility = 'visible';
@@ -55,7 +63,7 @@ export class W2dRenderer {
     // The flat-fill WASM backend cannot interpolate per-vertex colors. Keep
     // the original paint order and use Canvas for the whole page in that case.
     const hasGouraud = page.primitives.some(p => p.type === 'polygon' && p.vertexColors);
-    if (options.preferWasm && !hasGouraud) {
+    if (options.preferWasm && !hasGouraud && !hasEvenOddFill) {
       try {
         this.wasm ??= new WasmRasterBackend({ wasmUrl: options.wasmUrl });
         await this.wasm.init();
@@ -72,7 +80,7 @@ export class W2dRenderer {
 
     // Reject an excessive fallback before painting any part of the page.
     let gouraudPixels = 0;
-    for (const p of page.primitives) {
+    for (const p of options.flatGouraud ? [] : page.primitives) {
       if (p.type !== 'polygon' || p.vertexColors?.length !== p.points.length / 2) continue;
       const matrix = multiplyMatrix(pageMatrix, p.matrix ?? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
       for (let i = 1; i + 1 < p.vertexColors.length; i++) {
@@ -115,7 +123,9 @@ export class W2dRenderer {
       for (let i = 1; i + 1 < p.vertexColors.length; i++) {
         const indices = [0, i, i + 1];
         const points = indices.flatMap(index => transformPoint(matrix, p.points[index * 2]!, p.points[index * 2 + 1]!));
-        drawGouraudTriangle(ctx, points, indices.map(index => p.vertexColors![index]!));
+        const colors = indices.map(index => p.vertexColors![index]!);
+        if (options.flatGouraud) drawFlatTriangle(ctx, points, colors);
+        else drawGouraudTriangle(ctx, points, colors);
       }
       gouraudFilled = true;
       if (!p.stroke) return 1;
@@ -159,7 +169,7 @@ export class W2dRenderer {
     } else if (p.type === 'path') {
       ctx.beginPath();
       applyPathToCanvas(ctx, p.commands);
-      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (fill) { ctx.fillStyle = fill; ctx.fill(p.fillRule === 'evenodd' ? 'evenodd' : 'nonzero'); }
       if (p.stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
     }
     ctx.restore();
@@ -206,4 +216,25 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+/** One Gouraud triangle as a flat fill in the average of its vertex colours (option flatGouraud). */
+function drawFlatTriangle(ctx: CanvasRenderingContext2D, points: number[], colors: string[]): void {
+  const sum = [0, 0, 0, 0];
+  for (const c of colors) {
+    const m = /rgba?\(([^)]*)\)/i.exec(String(c));
+    const v = m ? m[1]!.split(',').map(Number) : [0, 0, 0, 1];
+    for (let i = 0; i < 4; i++) sum[i]! += i < 3 ? v[i] || 0 : (v[3] ?? 1);
+  }
+  const n = colors.length || 1;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.beginPath();
+  ctx.moveTo(points[0]!, points[1]!);
+  ctx.lineTo(points[2]!, points[3]!);
+  ctx.lineTo(points[4]!, points[5]!);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(${Math.round(sum[0]! / n)}, ${Math.round(sum[1]! / n)}, ${Math.round(sum[2]! / n)}, ${sum[3]! / n})`;
+  ctx.fill();
+  ctx.restore();
 }
